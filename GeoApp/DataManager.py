@@ -8,10 +8,36 @@ import os
 import re
 import urllib.request
 import pandas as pd
+import traceback
+
 from bs4 import BeautifulSoup
 from . import logger, PackageInfo
 
 contents_url = 'http://www.stats.gov.cn/tjsj/pcsj/rkpc/6rp/left.htm'
+
+
+def merge_objs(lst):
+    '''Merge objs from the [lst]'''
+    lst = list(lst)
+    res = [''.join(e.split()) for n, e in enumerate(lst) if e not in lst[:n]]
+    return '-'.join(res)
+
+
+def parse_dataFrame(df):
+    title = df[0][0]
+
+    _df = df[df[0] == '地 区']
+    header = _df.apply(merge_objs)
+
+    _df = df.iloc[1:]
+    body = _df[_df[0] != '地 区'].copy()
+
+    body.columns = header.to_list()
+    body['Location'] = body['地区'].map(lambda e: ''.join(e.split()))
+    body = body[body['Location'] != '全国']
+    body.index = range(len(body))
+
+    return title, header, body
 
 
 class DataManager(object):
@@ -30,7 +56,43 @@ class DataManager(object):
         - @self.url: The contents_url will be saved to the self.url.
         '''
         self.url = contents_url
+
+        try:
+            self.load_contents()
+        except:
+            err = traceback.format_exc()
+            logger.error(f'Failed to load contents, the error is "{err}"')
+
         logger.info('Initialized DataManager.')
+
+    def fetch_path(self, path):
+        ''' Fetch the content of the [path]
+
+        Args:
+        - @path: The path to be fetched.
+        '''
+        p = os.path.join(PackageInfo['dataDir'], path)
+        d = os.path.dirname(p)
+        if not os.path.isdir(d):
+            os.makedirs(d)
+            logger.debug(f'Made dir "{d}"')
+
+        pp = f'{p}.json'
+        if os.path.isfile(pp):
+            df = pd.read_json(pp)
+            logger.debug(f'Read DataFrame from {pp}')
+        else:
+            url = '/'.join([self.url[:-9], path])
+            df = pd.read_html(url)[0]
+            df = df.dropna()
+            df.to_json(pp)
+            logger.debug(f'Wrote DataFrame to {pp}')
+
+        title, header, body = parse_dataFrame(df)
+        print(title)
+        print(header)
+        print(body)
+        return body
 
     def get_uniques(self):
         ''' Get available uniques in self.contents.
@@ -38,6 +100,10 @@ class DataManager(object):
         Return:
         - The list of names.
         '''
+        if self.contents is None:
+            logger.error(f'Failed since contents is None')
+            return None
+
         logger.debug(f'Got {len(self.contents)} unique entries')
         return self.contents['unique'].to_list()
 
@@ -47,10 +113,13 @@ class DataManager(object):
         Args:
         - @name: The unique id of the path to get.
         '''
+        if self.contents is None:
+            logger.error(f'Failed since contents is None')
+            return None
+
         found = self.contents.query(f'unique == "{unique}"')
         if len(found) > 0:
-            logger.debug(
-                f'Got path for unique of "{unique}", the entry is "{found}"')
+            logger.debug(f'Got path for unique of "{unique}"')
             return found['path'][0]
         else:
             logger.error(f'Failed got path, invalid unique of "{unique}"')
@@ -77,6 +146,7 @@ class DataManager(object):
         Return:
         - @contents: The DataFrame table.
         '''
+        # Load
         path = os.path.join(PackageInfo['dataDir'], 'left.htm')
         if not os.path.isfile(path):
             resp = urllib.request.urlopen(self.url)
@@ -88,18 +158,18 @@ class DataManager(object):
             raw = open(path).read()
             logger.debug(f'Read content from {path}')
 
+        # Parse
         soup = BeautifulSoup(raw, 'html.parser')
         c = re.compile('html/[ABf].*\.htm')
         lst = soup.find_all('a', attrs={'href': c})
 
+        # Make DataFrame table
         contents = pd.DataFrame(columns=['path', 'name'])
         values = []
         for e in lst:
             values.append([e.text, e.attrs['href']])
-            # contents[e.text] = e.attrs['href']
         contents = pd.DataFrame(values)
         contents.columns = ['name', 'path']
-
         contents['unique'] = contents['name'] + ': ' + contents['path']
 
         self.contents = contents
