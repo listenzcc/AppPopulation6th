@@ -24,20 +24,47 @@ def merge_objs(lst):
 
 
 def parse_dataFrame(df):
+    ''' Parse the DataFrame [df] into known structure.
+
+    Args:
+    - @df: The DataFrame to be parsed.
+
+    Returns:
+    - @title: The title of the table;
+    - @columns: The columns of the table;
+    - @body: The table of the DataFrame.
+    '''
+    # Get the Title from the (0, 0) position
     title = df[0][0]
 
-    _df = df[df[0] == '地 区']
-    header = _df.apply(merge_objs)
+    # Parse Header
+    # We interest on the Rows with the first column is '地 区',
+    # [tt] is the string in the first column and the second row,
+    # normally, the value is '地 区'.
+    tt = df[0].to_list()[1]
+    _df = df[df[0] == tt]
+    columns = _df.apply(merge_objs)
 
+    # Parse Body
+    # The other Rows are the body contents
     _df = df.iloc[1:]
-    body = _df[_df[0] != '地 区'].copy()
+    body = _df[_df[0] != tt].copy()
 
-    body.columns = header.to_list()
-    body['Location'] = body['地区'].map(lambda e: ''.join(e.split()))
-    body = body[body['Location'] != '全国']
+    # Make the body better
+    columns = columns.to_list()
+    # for j, e in enumerate(columns):
+    #     if e == '现住地':
+    #         columns[j] = '地区'
+    #         break
+    body.columns = columns
+    print(body.columns)
+
+    if '地区' in body.columns:
+        body['Location'] = body['地区'].map(lambda e: ''.join(e.split()))
+        body = body[body['Location'] != '全国']
     body.index = range(len(body))
 
-    return title, header, body
+    return title, columns, body
 
 
 class DataManager(object):
@@ -88,17 +115,17 @@ class DataManager(object):
             df.to_json(pp)
             logger.debug(f'Wrote DataFrame to {pp}')
 
-        title, header, body = parse_dataFrame(df)
-        print(title)
-        print(header)
-        print(body)
-        return body
+        title, columns, body = parse_dataFrame(df)
+        # print(title)
+        # print(columns)
+        # print(body)
+        return title, columns, body
 
     def get_uniques(self):
         ''' Get available uniques in self.contents.
 
         Return:
-        - The list of names.
+        - The list of uniques.
         '''
         if self.contents is None:
             logger.error(f'Failed since contents is None')
@@ -120,7 +147,7 @@ class DataManager(object):
         found = self.contents.query(f'unique == "{unique}"')
         if len(found) > 0:
             logger.debug(f'Got path for unique of "{unique}"')
-            return found['path'][0]
+            return found['path'].to_list()[0]
         else:
             logger.error(f'Failed got path, invalid unique of "{unique}"')
             return None
@@ -175,7 +202,3 @@ class DataManager(object):
         self.contents = contents
         logger.debug(f'Parsed contents for {len(contents)} entries.')
         return contents
-
-
-if __name__ == '__main__':
-    print('Hello China.')
