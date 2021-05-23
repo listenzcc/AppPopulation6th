@@ -61,7 +61,6 @@ class DynamicData(object):
                           mapbox_zoom=3,
                           mapbox_center={"lat": 37.110573, "lon": 106.493924})
         self.fig = fig
-        fig.write_html('a.html')
         logger.info(f'Built Fig for "{self.title} - {col}".')
 
         pass
@@ -74,11 +73,12 @@ class DynamicData(object):
         '''
         try:
             unique = dm.get_path_by_unique(self.options1[idx]['label'])
-            title, columns, body = dm.fetch_path(unique)
+            title, url, columns, body = dm.fetch_path(unique)
             options2 = [{'label': e, 'value': j}
                         for j, e in enumerate(columns)]
             self.options2 = options2
             self.title = title
+            self.url = url
             self.body = body
 
         except:
@@ -115,6 +115,11 @@ control_div = html.Div([
     )
 ])
 
+# Url Div
+url_div = html.Div(
+    dcc.Link('Navigation', href='/', id='link1')
+)
+
 # Display Div
 display_div = html.Div([
     dcc.Graph(id='graph1',
@@ -127,13 +132,14 @@ display_div = html.Div([
 app.layout = html.Div([
     logo_div,
     control_div,
-    html.Div(id='display-value'),
+    url_div,
     display_div
 ])
 
 
 @app.callback([Output('graph1', 'figure'),
-               Output('dropdown2', 'options')],
+               Output('dropdown2', 'options'),
+               Output('link1', 'href')],
               [Input('dropdown1', 'value'),
                Input('dropdown2', 'value')])
 def display_value(value1, value2):
@@ -146,7 +152,7 @@ def display_value(value1, value2):
     if changed_id.startswith('dropdown2.'):
         dd.update_fig(value2)
 
-    return dd.fig, dd.options2
+    return dd.fig, dd.options2, dd.url
 
 
 def run_server():

@@ -97,6 +97,12 @@ class DataManager(object):
 
         Args:
         - @path: The path to be fetched.
+
+        Returns:
+        - @title: The title of the DataFrame Table;
+        - @url: The url of the Web Resource;
+        - @columns: The columns of the DataFrame Table;
+        - @body: The body of the DataFrame Table.
         '''
         p = os.path.join(PackageInfo['dataDir'], path)
         d = os.path.dirname(p)
@@ -104,12 +110,14 @@ class DataManager(object):
             os.makedirs(d)
             logger.debug(f'Made dir "{d}"')
 
+        # The Path of the May-be Existing GeoJson file
         pp = f'{p}.json'
+        # The Url of the Web Resource
+        url = '/'.join([self.url[:-9], path])
         if os.path.isfile(pp):
             df = pd.read_json(pp)
             logger.debug(f'Read DataFrame from {pp}')
         else:
-            url = '/'.join([self.url[:-9], path])
             df = pd.read_html(url)[0]
             df = df.dropna()
             df.to_json(pp)
@@ -119,7 +127,7 @@ class DataManager(object):
         # print(title)
         # print(columns)
         # print(body)
-        return title, columns, body
+        return title, url, columns, body
 
     def get_uniques(self):
         ''' Get available uniques in self.contents.
